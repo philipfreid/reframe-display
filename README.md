@@ -1,5 +1,7 @@
 # ReFrame Display
 
+Under Development!
+
 A configurable smart display system for home/office use, integrating Google Photos and Calendar (extensible to Spotify/Apple) with dual HDMI/web app modes. Built with FastAPI, React, and SQLite for self-hosted operation.
 
 ## Overview

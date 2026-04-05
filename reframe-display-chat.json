@@ -1,0 +1,1512 @@
+User: before we create any projects I want to brainstorm my idea as it will have implications on the approach we take
+
+GitHub Copilot: I'll help you brainstorm! Let me ask some questions to understand your project idea and its implications. 
+
+Analyzing your answers...
+
+Great! I'm ready to brainstorm. Go ahead and tell me about your project idea. Share as much detail as you'd like, including:
+
+- **What** you want to build
+- **Why** you're building it / the problem it solves
+- **Who** will use it
+- **Any specifics** about features, tech preferences, or constraints you have in mind
+- **Any concerns** you have about the approach
+
+What's your project idea?
+
+User: I want to build software to run a digital assistant smart display in my home. It should integrate with my Google account for Photos and Calendar, and ideally others such as my Apple ID as well. 
+
+I would like to run it on a wall-mounted display such as a Samsung Frame TV that blends into the kitchen decor.
+
+Initially this project is just for me, but I would like to structure it in such a way that others could use it by following a setup process we can document.
+
+I am unsure about whether the optimum output is a web application that the TV connects to using its inbuilt software, or if I should deploy it onto something like a Raspberry PI connected via USB.
+
+I used to be a software engineer but my coding skills have declined as I have spent the last few years in Product Management. I am open to ideas about how to approach this (coding language, hardware, architecture, etc) but would like to use this as a meaningful personal exploration into the world of product engineering with AI as a 'builder'/
+
+GitHub Copilot: This is a really interesting project, and I appreciate you thinking through the architecture before diving in. There are several design decisions that will significantly impact the approach. Let me brainstorm some key considerations with you:
+
+## Key Decision Areas
+
+**1. Deployment Architecture (Web vs Raspberry Pi)**
+- **Web app approach**: Samsung Frame TV has a web browser. You'd create a web app that runs in the browser. Simpler initial setup, but requires hosting somewhere (your home network or cloud).
+- **Raspberry Pi approach**: More hardware setup, but gives you full control, local-only operation (more private), and can integrate with other smart home tech.
+- *Implication*: Web app is faster to build and test; Raspberry Pi is more "kit-like" for others to replicate.
+
+**2. Backend Hosting**
+- **Self-hosted** (on Raspberry Pi or always-on home computer): Privacy-friendly, no cloud costs, but requires 24/7 uptime.
+- **Cloud** (AWS, Firebase, Render): Easier maintenance, but adds costs and potential privacy considerations for users' Google Photos/Calendar data.
+- *Implication*: Self-hosted fits your "blends into kitchen" vision; cloud is easier to scale for others.
+
+**3. Authentication & Data Privacy**
+- OAuth flows required for Google Photos, Calendar, and Apple ID
+- *Key question*: Should each user authenticate directly with Google/Apple, or do you proxy their credentials?
+- *Implication*: Direct auth is more secure but requires careful setup docs for users.
+
+**4. Tech Stack Choices**
+Given you're transitioning from PM and want AI as a co-builder:
+- **Frontend**: React/Vue (JavaScript) — widely documented, AI-friendly
+- **Backend**: Python (Flask/FastAPI) or Node.js — your choice
+- **Why it matters**: Python might feel fresher after years away, but JavaScript is seamless across frontend and backend
+- **Your edge**: AI can fill gaps in knowledge, so this is a great learning vehicle
+
+**5. Shareability Complexity**
+- Simple setup docs vs Self-hosted everything vs Docker containerization
+- Installation friction directly affects adoption
+
+## Questions for You
+
+1. **Privacy first or convenience first?** Do you want this completely self-hosted (private but more complex) or cloud-backed (easier but data goes elsewhere)?
+
+2. **Always-on requirement?** Does the display need real-time updates, or is periodic refresh (every 5-30 min) acceptable?
+
+3. **Just display or interaction?** Initially just showing photos/calendar, or do you want voice commands, gesture control, or touch interaction?
+
+4. **Hosting capacity**: Do you have a Raspberry Pi/NUC already, or would you need to get one?
+
+5. **Timeline flexibility**: Are you building this to use next month, or is it more of a 3-6 month learning exploration?
+
+What are your instincts on these? That'll help us pick the right architecture.
+
+User: Initially at least, I'm more inclined towards a Raspberry PI because of its low power consumption and being able to place it directly behind the display. I do have an old HP ProLiant N40L server I could use, but not sure I want that powered on 24/7 just for this purpose. 
+
+I would like to use OAuth, with each user logging into their respective accounts - no storage or proxy of anyone else's accounts. As I said, at first I would only be myself using this, but with the right structure I'd like to be able to help others set it up.
+
+Let's answer 4 and 5 later, do these first questions now
+
+GitHub Copilot: Perfect! That gives me great clarity on the architecture:
+
+**What you've committed to:**
+- ✅ Raspberry Pi (low power, headless behind display)
+- ✅ Self-hosted backend (privacy, local control)
+- ✅ Direct OAuth (each user logs in to their own Google/Apple accounts)
+- ✅ Structure for others to replicate
+
+This is a solid, defensible choice—privacy-respecting and low-cost to run.
+
+Now let me drill into the remaining questions:
+
+**Question 2: Real-time or periodic refresh?**
+Does the display need to update live as things change (new photos arrive, calendar event pops up), or is it OK if it refreshes every 5-30 minutes? This affects whether you need WebSockets, real-time listeners, etc.
+
+**Question 3: Display-only or interactive?**
+- Just showing a beautiful slideshow of photos + calendar view? 
+- Or do you want to interact with it—like tap to see more details, voice commands, swipe gestures, touch controls?
+- This significantly affects frontend complexity and whether you need just a browser or something more.
+
+What's your thinking on these two?
+
+User: let's answer 2 for now. I would prefer live updates, but help me understand the implications more. I don't expect to be editing the code myself, but would maintain it primarily via AI tooling, if that helps.
+
+GitHub Copilot: Great question. Let me lay out the real implications for **live updates vs periodic refresh**, especially considering you'll be maintaining this via AI:
+
+## Live Updates Architecture
+
+**What it means technically:**
+- Backend establishes WebSocket connection to the frontend (always open)
+- Backend actively listens to Google Photos and Calendar APIs for changes
+- When something new arrives, it pushes to the display in real-time
+
+**Implications:**
+- ✅ **User experience**: Photos appear instantly, calendar pops up when events are added
+- ✅ **Feels "alive"**: More polished, responsive
+- ❌ **Power**: Raspberry Pi is constantly listening and processing (higher CPU/battery if battery-backed)
+- ❌ **Complexity**: More moving parts—WebSockets, real-time listeners, connection recovery logic
+- ❌ **Maintenance burden**: More edge cases (network drops, API rate limits, connection timeouts)—AI can help, but more to debug
+- ❌ **Google/Apple API limits**: Google Photos doesn't have true push notifications; you'd be polling frequently anyway, so you still get some delays
+
+## Periodic Refresh (e.g., every 15 min)
+
+**What it means:**
+- Backend wakes up every 15 minutes, fetches new photos/calendar, sends to frontend
+- Frontend displays whatever arrived in that batch
+
+**Implications:**
+- ✅ **Simplicity**: Timer + fetch + update. Much easier to reason about and maintain
+- ✅ **Power**: Raspberry Pi mostly sleeping, wakes only when needed
+- ✅ **Reliability**: No complex connection state to manage
+- ✅ **API friendly**: Respects rate limits, predictable load on Google/Apple
+- ❌ **Slight lag**: New photos might wait 15 mins to appear
+- ❌ **Less "alive"**: Feels more like a static display that updates occasionally
+
+## The Reality Check
+
+Here's the thing: **Google Photos doesn't have real-time push APIs.** You'll be polling either way. So "live updates" really means "poll every 30-60 seconds" vs "poll every 15 minutes." The difference isn't dramatic from a UX perspective.
+
+## My Recommendation for Your Situation
+
+Given:
+- You're maintaining via AI (not touching code)
+- You want this stable behind your kitchen display
+- Low power consumption matters
+- Shareability matters (others copying your setup)
+
+**I'd lean toward periodic refresh (15-30 min).** Here's why:
+- **AI maintenance is easier**: Fewer edge cases, simpler debugging
+- **More reliable**: Less state to manage
+- **Power efficient**: Matters on Raspberry Pi long-term
+- **Easier for others to replicate**: No complex WebSocket infrastructure
+- **Good enough UX**: 15-min delay on a kitchen display is genuinely fine for photos/calendar
+
+The "live feel" you get from periodic refresh is actually pretty good—users won't notice a 15-min delay on a passive display.
+
+**Does that reasoning resonate, or does the real-time aspect matter for your use case?** (e.g., "I want calendar alerts to pop immediately")
+
+User: I agree with periodic refresh. The compromise is that I would want to be able to configure the refresh interval easily, via a config file or something that the app polls and updates. 
+
+GitHub Copilot: Excellent addition—that's exactly the right instinct. **Configurable refresh intervals** is a great middle ground that gives you flexibility without adding much complexity.
+
+**Simple approach:**
+- Config file (JSON/YAML) with settings like:
+  ```json
+  {
+    "refreshIntervalSeconds": 900,  // 15 mins
+    "photosLimit": 50,
+    "timezoneOffset": "America/New_York"
+  }
+  ```
+- Backend reads this config at startup and on each refresh cycle
+- Updates take effect immediately after the next read—no restart needed
+- Easy for others to customize: change one file, done
+
+This keeps maintenance simple for AI tooling (no complex hot-reloading needed) while giving you the flexibility you want.
+
+---
+
+Alright, we've got:
+- ✅ Raspberry Pi backend, self-hosted
+- ✅ Direct OAuth (no credential storage)
+- ✅ Periodic refresh (15-30 min) with configurable intervals
+- ❓ Still need to answer: **Display-only or interactive?** (Question 3)
+
+Then we can talk tech stack.
+
+What's your vision for interaction—are you thinking a pure passive display (beautiful slideshow + calendar), or do you want some interaction like tapping to see more details, dismissing notifications, etc?
+
+User: good so far. What alternatives might there be vs Raspberry Pi for this use case? I am not too familiar with the options and don't want to be constrained by my own ignorance
+
+GitHub Copilot: Great question! Let me break down the realistic alternatives for your use case:
+
+## Single-Board Computers (like Raspberry Pi)
+
+**Raspberry Pi 5** (current)
+- $60-80, low power (~5-10W), small, huge ecosystem
+- ✅ Proven for this exact use case
+- ❌ Limited CPU, can stutter with lots of photos
+
+**Orange Pi, Banana Pi, Rock Pi**
+- Cheaper ($25-40), similar specs, but less documentation/community support
+- Fine if RPi is out of stock, but RPi is usually better investment
+
+**NVIDIA Jetson Orin Nano** (~$150)
+- Way more powerful, much higher power draw (25W+)
+- Only makes sense if you add AI (voice recognition, image processing)
+- Overkill for your initial use case
+
+---
+
+## Mini PCs / Repurposed Hardware
+
+**Intel NUC or similar mini PC**
+- Better performance, can run more OS options (Windows, Linux, macOS)
+- ✅ More powerful if needs grow
+- ❌ 20-30W power draw, pricier ($300+)
+- Your old HP ProLiant falls here—but 24/7 on a server is overkill power-wise
+
+**Old laptop as always-on device**
+- ✅ You probably have one lying around
+- ❌ Laptop cooling/design not meant for 24/7, will wear out, inefficient
+
+---
+
+## Alternative: Skip Custom Hardware, Use Smart TV Apps
+
+**Samsung TV built-in apps**
+- Deploy directly on Samsung Frame TV using SmartThings or Custom Developer Mode
+- ✅ No separate hardware
+- ❌ Samsung's development environment is restrictive, OAuth flow is messy, limited customization
+
+**Other smart display ecosystems** (Echo Show, Google Nest Hub)
+- ✅ Already made for this
+- ❌ Can't customize, locked into vendor features
+
+---
+
+## Alternative: Cloud-hosted web app
+
+**No local hardware—backend in cloud**
+- Samsung TV just browses your cloud app
+- ✅ No hardware buying/managing
+- ❌ Privacy (Google Photos data goes through your server), internet dependency, hosting costs, less "blends into kitchen" feel
+
+---
+
+## My Take for Your Situation
+
+**Raspberry Pi 5 is the right choice.** Here's why:
+- **Perfect power profile**: 5-10W 24/7 is ~$2-3/month in UK electricity—negligible
+- **Smallest form factor**: Actually fits behind the display
+- **Massive ecosystem**: If you need help via AI or community, tons of examples
+- **Repurposing**: If it doesn't work out, easy to repurpose
+- **Cost**: $80 one-time, done
+- **Shareability**: Others can easily replicate the setup
+
+**Only deviate if:**
+- You plan to add real AI/ML features (voice commands, image recognition) → then consider Jetson
+- You have specific software constraints that need more power → then consider NUC
+- You want to skip custom hardware entirely → then consider Samsung SmartThings dev mode (but more complex)
+
+Does Raspberry Pi 5 feel like the right fit, or are any of these other angles calling to you?
+
+User: I would like to design it so that if I needed to add AI features, I could upgrade to Jetson (or other options) in future if I needed to. I agree Raspberry Pi is the correct choice. 
+
+GitHub Copilot: Perfect thinking. This is smart product architecture—design once, scale seamlessly. Here's how to structure that:
+
+## Design for Hardware Portability
+
+**Key principles:**
+1. **Containerize everything** (Docker) - runs identically on RPi, Jetson, NUC, or cloud
+2. **Keep hardware concerns isolated** - separate "backend business logic" from "device-specific code"
+3. **Resource-aware but not over-optimized** - write clean code, not RPi-specific hacks; when you upgrade, it just runs faster
+4. **Config-driven deployment** - different docker-compose files for different hardware, but same codebase
+
+**Implications:**
+- Your RPi backend code will run *exactly the same* on a Jetson
+- When you upgrade, you just point to a more powerful box
+- Zero refactoring needed if architecture is right
+
+---
+
+Now the big decision: **Tech stack for the backend.**
+
+Given you're maintaining via AI and want this portable, I'd recommend one of two paths:
+
+**Option A: Python (FastAPI) + React Frontend**
+- ✅ Python is forgiving, easier to maintain via AI
+- ✅ FastAPI is modern, well-documented
+- ✅ React frontend is AI-friendly, tons of examples
+- ✅ Docker support is excellent
+- ❌ Python startup time slightly slower on RPi (negligible)
+
+**Option B: Node.js (Express/Fastify) + React Frontend**
+- ✅ Single language (JavaScript everywhere)
+- ✅ Faster startup on RPi
+- ✅ Excellent async handling for API calls
+- ❌ Slightly more complex for beginners
+
+**My recommendation: Option A (Python + React)**
+
+Why:
+- You're returning to coding; Python reads more naturally
+- AI tooling is excellent at Python (clearer intent)
+- FastAPI is perfect for your use case (OAuth, scheduling, API calls)
+- Easier to debug and iterate on initial version
+
+---
+
+**Questions before we lock this in:**
+
+1. **Confirmation**: Does "display-only initially" work for you? (We skipped question 3—I'm assuming no touch interaction needed yet, just beautifully presenting photos + calendar?)
+
+2. **OS preference**: Should it run on Raspberry Pi OS (Linux based), or do you have another preference?
+
+Ready to move to implementation planning?
+
+User: let's return to question 3 in a moment. I agree with Docker and Python as a choice. I want to be able to easily deploy updates from this machine direct to the Pi. 
+
+When we start building, I also want to understand the planned architecture and step through it as we create it so that despite me not planning to write much 'net new' code myself, I want to understand each aspect of the project, how it works and how the pieces fit together. 
+
+I hadn't thought of implementing 'touch mode' at first, perhps something we could add support for later. But the type of display I had in mind is not a touch screen.
+
+GitHub Copilot: Excellent clarifications. This changes things for the better—you're building a learning experience, not just a project. I love that approach.
+
+Let me confirm and address the key points:
+
+## Question 3: ✅ Answered
+Display-only, passive slideshow + calendar view. No touch interaction needed initially. Room to add later.
+
+---
+
+## Deployment Strategy (Dev → RPi)
+
+This is crucial for your workflow. Here's what I recommend:
+
+**Setup:**
+- Your machine (macOS) = development environment
+- Raspberry Pi = production environment
+- Git repo (local or GitHub) = single source of truth
+
+**Deployment flow:**
+1. You make changes locally (or AI makes them)
+2. Commit to git
+3. Run one command: `deploy.sh` (or similar)
+4. Script pulls latest from git on RPi, rebuilds Docker image, restarts
+5. Display updates within seconds
+
+**Tools:**
+- SSH for remote access to RPi
+- Docker for consistent environments
+- Simple shell script to orchestrate
+
+This is very doable and will feel "real"—like pushing to production.
+
+---
+
+## Architecture Walkthrough Plan
+
+Before we build a single line of code, I propose:
+
+1. **Draw the architecture** - diagram showing: Browser ↔ React Frontend ↔ FastAPI Backend ↔ Google APIs / Local Storage
+2. **Define each component** - what does each piece do?
+3. **Define data flows** - when user opens display, what happens? When config changes? When OAuth token expires?
+4. **Define the deployment** - how does code get from your laptop to the Pi?
+5. **Identify dependencies** - what libraries, APIs, credentials needed?
+
+Only *then* do we start building—piece by piece.
+
+---
+
+**Are you ready to move to architecture design?** Or do you want to answer questions 4 & 5 first (hardware specifics and timeline)?
+
+User: let's answer 4 and 5
+
+GitHub Copilot: Analyzing your answers...
+
+Perfect. This is ideal context:
+
+**You're in the learning mode** → We can take our time to really understand each piece
+**You need to order a Pi** → We can design and build the architecture while it ships (1-2 weeks typically)
+
+This actually works *perfectly* for your learning goal. We can:
+1. Design the architecture thoroughly
+2. Build and test on your Mac (using Docker to simulate the RPi environment)
+3. Have everything ready to deploy the moment the Pi arrives
+4. Walk through each component as we build it
+
+---
+
+## Summary of Your Requirements
+
+✅ **Hardware**: Raspberry Pi 5 (to be ordered)  
+✅ **Backend**: Python + FastAPI  
+✅ **Frontend**: React  
+✅ **Deployment**: Docker + SSH push from your Mac  
+✅ **Data refresh**: Periodic (configurable, 15-30 min intervals)  
+✅ **Authentication**: Direct OAuth (Google Photos, Calendar, Apple ID)  
+✅ **Self-hosted**: All local to Raspberry Pi behind your display  
+✅ **Extensible**: Architecture designed to support Jetson/upgrades later  
+✅ **Display-only**: Beautiful slideshow + calendar, no touch initially  
+✅ **Learning-focused**: Understand each piece as we build  
+
+---
+
+**Ready to move to architecture design?** I'll create a visual diagram and walkthrough of:
+- System components and how they connect
+- Data flows for different scenarios
+- Deployment strategy
+- File structure and technology choices
+
+Then we build piece-by-piece with full explanation of each part.
+
+Shall we start?
+
+User: have I answered all your questions so far?
+
+GitHub Copilot: Yes! Let me check:
+
+✅ **Initial brainstorm questions:**
+- Project type: Home digital assistant display
+- Primary purpose: Google Photos + Calendar + Apple ID integration
+- Scope: 3-6 month learning exploration
+- Tech preferences: Python + FastAPI + React (agreed with recommendations)
+- Priorities: Learning and maintainability (implied through your answers)
+
+✅ **Deep dive questions:**
+- Deployment: Raspberry Pi 5
+- Auth: Direct OAuth, self-hosted, no proxying
+- Updates: Periodic + configurable intervals
+- Hardware capacity: Will buy Pi 5
+- Timeline: No rush, learning pace priority
+
+✅ **Additional clarity:**
+- Display-only initially, no touch interaction
+- Easy deployment from your Mac to Pi
+- Want to understand architecture as we build
+- Designed for future upgrades (Jetson-ready)
+
+The only thing I didn't explicitly confirm: **Are there any other data sources you want to integrate beyond Google Photos, Google Calendar, and Apple ID?** (e.g., weather, news, Spotify, other calendar sources, etc.)
+
+Or are we starting with just those three?
+
+User: the priority is Google ecosystem integration as I use that the most - calendar and photos are the primary source of information initially. But I would like to be able to add other sources such as Spotify in future so that I can display what's playing etc. Essentially, all aspects of this project need to support iterations, additions and scalability.
+
+I want to create it documentation-first so that it's structured like an open source project - if anyone ever comes across what we create and appreciates it, they can fork it etc.
+
+GitHub Copilot: Excellent. This is a significant upgrade to the architecture thinking—and it changes how we organize the code fundamentally.
+
+Let me capture this in session memory and then we'll design the architecture with these principles: 
+
+Created memory file /memories/session/project-decisions.md
+
+Got it. Now that I have full clarity, here's what "documentation-first, open-source ready" means for your architecture:
+
+## Project Structure (Conceptual)
+
+```
+smart-display/
+├── docs/                          # Documentation hub
+│   ├── ARCHITECTURE.md           # System design, data flows
+│   ├── SETUP.md                  # Step-by-step Pi setup
+│   ├── DEVELOPERS.md             # For contributors
+│   ├── API.md                    # Backend API reference
+│   └── INTEGRATIONS.md           # How to add new data sources
+├── backend/                        # FastAPI service
+│   ├── app/
+│   │   ├── core/                 # Config, auth, logging
+│   │   ├── integrations/         # Modular data sources
+│   │   │   ├── google_photos.py
+│   │   │   ├── google_calendar.py
+│   │   │   └── spotify.py        # Example future integration
+│   │   ├── models/               # Data schemas
+│   │   └── routes/               # API endpoints
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/                       # React app
+│   ├── src/
+│   │   ├── components/           # UI components (slideshow, calendar, etc)
+│   │   ├── pages/
+│   │   └── services/             # API calls to backend
+│   ├── Dockerfile
+│   └── package.json
+├── deploy/                         # Deployment scripts
+│   ├── docker-compose.yml
+│   ├── deploy.sh                 # Push to Pi
+│   └── pi-setup.sh               # Initial Pi setup
+├── config/
+│   ├── config.example.json       # Example configuration
+│   └── config.json               # User's actual config (git-ignored)
+├── README.md
+├── LICENSE
+├── CONTRIBUTING.md
+└── .github/
+    └── workflows/                # CI/CD (GitHub Actions, optional)
+```
+
+## Key Architecture Principles
+
+1. **Modular Integrations**: Each data source (Google, Spotify, etc.) is a separate module with a common interface
+2. **Config-driven**: What's displayed and how is controlled by config file, not code
+3. **Documentation as design**: Docs explain *why* choices were made, not just *what* was built
+4. **Easy for forks**: Clear instructions for someone to adapt to their own setup
+
+---
+
+**Ready to create this architecture together?** Next step:
+
+1. **System diagram** - visualize how all pieces connect
+2. **Data flow example** - walk through what happens when display refreshes
+3. **File-by-file walkthrough** - explain each component
+4. **Then build** - we code piece by piece
+
+Shall we start with the system diagram?
+
+User: before we proceed, is there any need for a data persistence layer like a noSQL or object DB? I'm not sure if the running app will require to store configuration etc 
+
+GitHub Copilot: Excellent question. This is an important architectural decision. Let me break it down:
+
+## What Needs Storage?
+
+**OAuth Tokens** (MUST persist securely)
+- Refresh tokens—these are long-lived, needed to get new access tokens
+- Can't re-authenticate every 15 minutes; defeats the purpose
+- Must be encrypted (never plain text)
+
+**Configuration** (Already planned)
+- JSON or YAML file in the repo (git-ignored for user's actual config)
+
+**Cache/Metadata** (Nice to have, not essential)
+- Photo metadata, calendar event details—reduces API calls
+- Can be rebuilt if lost
+
+**Session data** (Minimal)
+- Current user, display state—could be in-memory
+
+---
+
+## My Recommendation: **SQLite**
+
+**Why SQLite, not NoSQL/PostgreSQL?**
+- ✅ **Single file** (`data.db`) - lives on Pi, zero setup
+- ✅ **Secure token storage** - supports encryption via `cryptography` library
+- ✅ **Perfect for single-user/local deployment** - this is exactly SQLite's use case
+- ✅ **Easy backup** - just copy the file
+- ✅ **Scales later** - if you ever need PostgreSQL, schema is identical, just migrate
+- ✅ **Zero maintenance** - no separate database server running on Pi
+- ❌ PostgreSQL/MongoDB: Overkill, extra complexity, competing for RPi resources
+
+---
+
+## Updated Architecture
+
+```
+Config layer: config.json (user settings, what to display)
+    ↓
+FastAPI Backend
+    ↓
+SQLite (OAuth tokens, cached metadata)
+    ↓
+Google APIs (fetch fresh photos, calendar)
+```
+
+**In practice:**
+- Backend reads `config.json` on startup + every refresh
+- Stores/refreshes OAuth tokens securely in SQLite
+- Caches optional data (photo URLs, event summary) in SQLite
+- On each refresh cycle, checks if tokens need refresh, fetches new data
+
+---
+
+**Does this make sense?** Should we proceed with SQLite as the persistence layer, or do you have concerns?
+
+User: this makes sense. Is this a concern you had already considered, or did it only come up when I asked the previous question? I am curious if there would have been a gap or a 'bug' if we hadn't thought of the data persistence
+
+GitHub Copilot: Great question—you're calibrating your own thinking, which I appreciate.
+
+**Honest answer: I would have caught it, but only during detailed architecture design.**
+
+When we got to the data flow walkthrough (which we're about to do), I would have asked: "How do we maintain Google OAuth tokens between refresh cycles?" That question naturally leads to: "Oh, we need persistence."
+
+**But would it have been a bug if we'd missed it?** 
+
+Absolutely. The first time someone ran the app, authenticated with Google, then restarted it and had to re-authenticate... that would be the "oh no" moment. OAuth refresh tokens exist specifically for this problem.
+
+---
+
+**Why it matters you caught it now:**
+
+Your question shows solid engineering instincts—you're thinking about **data lifecycle** early, not after we've built the whole thing. That's the difference between:
+
+❌ Building then discovering "wait, where do we store tokens?"  
+✅ Designing persistence into the architecture from day one
+
+This is exactly why the brainstorm-before-build approach works. You spotted a gap in the conversation before we coded.
+
+---
+
+**This reinforces the value of architecture first**: We can surface these decisions *now*, adjust them, then build with confidence. No surprises mid-project.
+
+Ready to visualize the system with this persistence layer included?
+
+User: before we continue, I want to be clear that I am not duplicating something that exists. I have a Google Home display but it's too small, I don't like the fat form factor and it does not integrate with other sources, particularly Apple. I also have some Alexa devices, but I don't think they meet my needs so far.
+
+Is there any obvious solution you can think of that I haven't considered? 
+
+GitHub Copilot: Good instinct to check. Let me think through the existing landscape:
+
+**Existing solutions I'd consider:**
+
+1. **Home Assistant** (open-source, runs on Pi)
+   - ✅ Extensible, self-hosted, community-driven
+   - ❌ Built for home automation, not photo/calendar display
+   - ❌ Overkill for your use case, steeper learning curve
+   - ❌ Not optimized for beautiful passive display
+
+2. **Digital photo frames** (Aura, Skylight, Meural, etc)
+   - ✅ Designed for this exact UX (beautiful display)
+   - ❌ Proprietary, expensive ($200-600)
+   - ❌ Limited integrations, closed ecosystems
+   - ❌ Can't customize, can't add Spotify later
+
+3. **Samsung SmartThings / TV built-in apps**
+   - ✅ No extra hardware
+   - ❌ Very limited customization
+   - ❌ Vendor lock-in, API limitations
+   - ❌ Hard to integrate multiple sources
+
+4. **Generic kiosk/dashboard services** (Dakboard, etc)
+   - ✅ Some multi-source support
+   - ❌ Cloud-hosted, privacy concerns
+   - ❌ Not self-hosted
+   - ❌ Limited extensibility
+
+---
+
+**My honest assessment:**
+
+There's **no obvious off-the-shelf solution** that combines:
+- Self-hosted on a Pi
+- Multi-source (Google + Apple + future Spotify)
+- Beautiful, designed-for-display UX
+- Open-source / customizable
+- Easy setup for others to replicate
+
+You're filling a real gap. This is worth building.
+
+**Want me to do a deeper search to be thorough?** Or are you confident this is worth the build?
+
+User: I want to provide a low-cost solution myself but also these high-cost alternatives with tight-coupling to particular ecosystems or high subscription prices. 
+
+Do a deeper search as well, good idea. I suppose this is my product instinct kicking in.
+
+I have a couple of other features we could add that might change our approach and architecture, but I'll tell you about those shortly
+
+GitHub Copilot: Perfect—that's exactly the product thinking you need. Let me do a deeper search to map the competitive and alternative landscape.   
+
+
+
+
+
+
+
+Fetched 3 resources
+
+Fetched https://www.reddit.com/r/homeautomation/search/?q=smart display calendar photos
+
+Fetched https://www.reddit.com/r/raspberry_pi/search/?q=display calendar photos
+
+Excellent search results! Let me summarize what I found:
+
+## Competitive Landscape Summary
+
+**Most relevant existing projects:**
+
+1. **Nova** (github.com/RaphTHLN/Nova) — CLOSEST COMPETITOR
+   - React + Python + Flask + Docker
+   - Custom smart display for Raspberry Pi
+   - **Includes**: Spotify integration, OAuth2, dashboard UI
+   - **Gaps**: Appears to be more task/weather/music focused, not specifically calendar+photos
+
+2. **home-screens** (github.com/home-screens/home-screens) — ALSO VERY RELEVANT
+   - TypeScript, Raspberry Pi, self-hosted, drag-and-drop system
+   - Marketed as "Dakboard alternative"
+   - More generic dashboard system
+   - Recently updated (1 hour ago according to GitHub)
+
+3. **Sora Digital Photo Frame** (github.com/Sorbh/sora-digital-photo-frame)
+   - Node.js + JavaScript, self-hosted, photo gallery focused
+   - **Missing**: Calendar integration, multi-source support
+
+4. **DashPiX** (github.com/ProgrammerNomad/DashPiX)
+   - Python + Raspberry Pi
+   - Weather, clock, notifications
+   - **Missing**: Calendar, photos, multi-source integration
+
+5. **SmartDisplayPi** (github.com/Piflyer/SmartDisplayPi)
+   - Google Assistant focused
+   - **Missing**: Calendar + photos together, Apple integration
+
+---
+
+## The Gap You're Filling
+
+All of these projects focus on **either/or**:
+- Photos **OR** calendar (not both centered)
+- Single ecosystem (Google, Immich, Synology)
+- Generic dashboards (not optimized for passive display beauty)
+- No Apple/multi-source integration
+
+**Your unique value:**
+- ✅ Calendar + Photos as *primary* (not secondary features)
+- ✅ Multi-source (Google + Apple + Spotify + extensible)
+- ✅ Designed for beautiful passive display (not task management)
+- ✅ Documentation-first, forklable, low-cost
+- ✅ Learning-focused architecture (transparent design choices)
+
+**You're definitely building something distinctive.**
+
+Now—you mentioned you have other features that might change the architecture. **What are those?** Let me hear them before we finalize the design.
+
+User: I had a look at Nova and it does seem similar in purpose, features and architecture. But it's written in a mix of English and French documentation and with a different set of languages etc. 
+
+I also want to make the setup easier for less technical people vs what appears to be fairly onerous install for Nova.
+
+On the other hand, I'm not sure that my primary focus on calendar and photos is really a unique value proposition. What do you think of this?
+
+GitHub Copilot: You're asking exactly the right question, and I appreciate you pushing back. Your product instinct is spot-on here.
+
+**Honest take: Calendar + Photos isn't particularly unique.**
+
+Nova, home-screens, and others do similar things. The question is: **what's the actual differentiation?**
+
+Let me reframe it from a product perspective:
+
+**Nova's positioning**: "Transform any old computer into a personalized smart hub" — It's a *dashboard*. Task-oriented, feature-rich, configurable.
+
+**What you *could* be building**: A *beautiful ambient display for the home* that happens to show calendar and photos. Very different category.
+
+The distinction:
+- Dashboard = busy, informational, for checking things
+- Ambient display = calm, beautiful, you glance at it passively
+
+**Real differentiators (not feature differentiators):**
+
+1. **Setup for non-technical people** — You mentioned this. If a 65-year-old could set it up in 10 minutes following a guide, that's unique. Nova isn't there.
+
+2. **Curated aesthetic** — A display designed to look intentionally beautiful on a kitchen wall 24/7, not utilitarian
+
+3. **Sensible defaults** — Works beautifully out of the box, not "configure these 15 settings to make it good"
+
+4. **Family-first** — Multiple people's calendars + shared photo albums, presented beautifully together
+
+5. **Calm tech ethos** — Minimal notifications, no urgency, designed specifically NOT to interrupt
+
+---
+
+**So here's my question back to you:**
+
+When you imagine this running on your Samsung Frame TV in your kitchen, what does the *experience* feel like? Is it:
+- A dashboard you check for information?
+- A calming, beautiful frame you passively enjoy?
+- Something in between?
+
+What are those other features you mentioned that might change the architecture? That might clarify the real vision here.
+
+User: I am not envisaging a task manager, certainly that would not be the primary focus. But I do want a clock to show at all times, and probably a simple weather integration.
+
+My son has suggested some interactive features like timers for cooking meals, recipes etc. But that implies more interactivity than I had thought of. There could be some kind of admin UI I suppose. Not sure how strongly I feel about this
+
+GitHub Copilot: Analyzing your answers...
+
+
+
+Fetched 2 resources
+
+
+
+Fetched 3 resources
+
+
+
+Fetched 2 resources
+
+Based on my knowledge of Samsung Frame TVs, **they do NOT support touch screens**. They're regular TVs designed to blend into walls and display art when not in use. Control is via remote or the SmartThings app.
+
+This changes things significantly for your interactive features:
+
+## Current Reality
+- **No touch interaction** on the Frame TV itself
+- **Interactive features** (timers, recipes) would require:
+  - Voice control (Google Assistant integration)
+  - Separate device control (phone/tablet)
+  - Or dropping interactive features entirely
+
+## Architecture Implications
+
+**Option A: Keep Frame TV, make it passive**
+- Clock + weather + photos + calendar only
+- Admin via web interface on phone/computer
+- Simple, reliable, matches your original vision
+
+**Option B: Switch to touch-capable display**
+- Options: Samsung Galaxy Tab (mounted), Amazon Echo Show, Google Nest Hub
+- Enables timers, recipes, touch controls
+- More complex setup, different form factor
+
+**Option C: Add voice control**
+- Integrate Google Assistant SDK
+- Voice commands for timers/recipes
+- Keeps Frame TV but adds complexity
+
+---
+
+**Given your son's suggestion for timers/recipes, which direction interests you more?**
+
+1. **Stick with passive display** (simpler, more reliable)
+2. **Switch to touch-capable hardware** (more interactive, different setup)
+3. **Add voice control** (interactive without changing hardware)
+
+This will finalize our architecture before we start building.
+
+User: I'd consider mounting a tablet instead of a TV in order to provide touch input. But would this preclude the Raspberry Pi approach? I would need to lock the display into a kiosk mode
+
+GitHub Copilot: 
+
+Fetched 3 resources
+
+Yes! **Using a tablet instead of the Frame TV is absolutely compatible with the Raspberry Pi approach.** This is a very common setup—many projects do exactly this.
+
+## Why It Works
+
+**Hardware Connection:**
+- Raspberry Pi connects to tablet via HDMI/USB
+- Touch events are transmitted through the HDMI connection
+- Power consumption remains low (~5-10W for Pi + tablet power draw)
+
+**Software Setup:**
+- Chromium browser runs in kiosk mode on the Pi
+- Touch input is handled natively by the browser
+- Same Docker containerization works
+
+**Examples from the search:**
+- `geerlingguy/pi-kiosk` - Specifically for Raspberry Pi + touchscreen kiosk
+- Multiple projects show this is a standard pattern
+
+## Architecture Remains the Same
+
+Your backend (FastAPI + SQLite) and frontend (React) work identically. The only difference is the display hardware supports touch.
+
+## Touch vs Frame TV Trade-offs
+
+**Tablet Advantages:**
+- ✅ Touch interaction for timers/recipes
+- ✅ More flexible mounting options
+- ✅ Can still look good on a wall
+- ✅ Cheaper than Frame TV ($100-200 vs $1000+)
+
+**Tablet Disadvantages:**
+- ❌ Less "frameless" aesthetic than Frame TV
+- ❌ May need separate power adapter
+- ❌ Less premium look
+
+**Frame TV Advantages:**
+- ✅ Seamless wall integration
+- ✅ Premium aesthetic
+- ✅ Single power cable
+
+**Frame TV Disadvantages:**
+- ❌ No touch interaction
+- ❌ Expensive
+
+## Recommendation
+
+If touch interaction is important to you, **switch to a tablet**. It's a great compromise—enables your son's timer/recipe features while keeping the Raspberry Pi architecture you want.
+
+You can get a decent Android tablet for $100-150 that will work perfectly. The setup is well-documented in the Pi kiosk projects I found.
+
+Does this change your thinking on the display choice?
+
+User: I can make the mounted tablet look good with some DIY. The lower hardware cost and touch screen capability makes this compelling. 
+
+I would want to configure the app to support interactivity via touch AND a view-only configuration that, when enabled, turns off interactive features. 
+
+
+
+GitHub Copilot: Perfect! This is a great feature that makes your app more versatile—**passive ambient display OR interactive kitchen helper**, configurable by the user.
+
+## How This Fits the Architecture
+
+**Config-driven approach:**
+```json
+{
+  "interactiveMode": false,  // true = touch controls enabled, false = passive display
+  "refreshIntervalSeconds": 900,
+  // ... other settings
+}
+```
+
+**Frontend behavior:**
+- When `interactiveMode: false` → Pure slideshow + calendar (like original vision)
+- When `interactiveMode: true` → Adds touch controls for timers, recipes, etc.
+
+**Benefits:**
+- ✅ **Flexible deployment** - Same app works for different use cases
+- ✅ **Easy configuration** - Users can toggle via config file
+- ✅ **Future-proof** - Easy to add more interactive features
+- ✅ **Backwards compatible** - View-only mode matches your original requirements
+
+---
+
+## Final Architecture Summary
+
+We've now decided on:
+
+✅ **Hardware**: Raspberry Pi 5 + mounted tablet (touch-enabled)  
+✅ **Backend**: Python FastAPI + SQLite (OAuth tokens, caching)  
+✅ **Frontend**: React (conditional touch controls)  
+✅ **Deployment**: Docker + SSH push from Mac  
+✅ **Data Sources**: Google Photos + Calendar (initial), extensible to Spotify/Apple  
+✅ **Modes**: Configurable interactive vs passive display  
+✅ **Documentation**: Open-source ready, step-by-step setup  
+
+---
+
+**I think we've covered all the major decisions!** 
+
+The only remaining question is: **Are there any other features or constraints I should know about before we design the system architecture?**
+
+If not, we can move to creating the visual system diagram and explaining each component. This will be the foundation for building the actual code.
+
+Ready to start the architecture design phase?
+
+User: could this also work with other tablet devices such as old iPads? People have lots of old models in drawers etc., so with this approach it also has that reuse / sustainability aspect where people want to know how to reuse old hardware that companies like apple or Google no longer provide updates for
+
+GitHub Copilot: 
+
+Fetched 3 resources
+
+Compacted conversationYes, absolutely! Using old iPads (or any tablet/phone with a web browser) is a fantastic idea for sustainability reasons - it gives new life to devices that companies like Apple no longer support with updates. This approach would actually be **even better** than the Android tablet idea I mentioned earlier.
+
+## How It Would Work
+
+Instead of connecting a tablet via HDMI, the Raspberry Pi would **serve a web app** that any device can access over your home WiFi network. Here's the architecture:
+
+### Device-Agnostic Web App Approach
+- **Raspberry Pi** runs the backend (FastAPI + SQLite) and serves a **React web app**
+- **Any tablet/phone** (iPad, Android, old phone) connects to the Pi's web server via browser
+- **Kiosk mode** locks the device to that single browser tab
+
+### iPad-Specific Benefits
+- **Guided Access mode** in iOS can lock the iPad to Safari showing just your display
+- Old iPads (iPad 2, iPad Air, etc.) still run modern web browsers
+- **Touch interaction** works perfectly through the web interface
+- **No hardware compatibility issues** - just needs WiFi and a browser
+
+### Setup Process
+1. Pi serves the web app on your local network (e.g., `http://192.168.1.100:3000`)
+2. iPad connects to your WiFi
+3. Open Safari to the Pi's address
+4. Enable Guided Access to lock it to that page
+5. Configure refresh intervals and interactive/passive modes via the web interface
+
+### Sustainability Impact
+This approach lets people reuse:
+- Old iPads collecting dust
+- Retired Android tablets  
+- Even old smartphones as displays
+- Any device with a modern web browser
+
+### Technical Feasibility
+From my research, this is very doable:
+- Raspberry Pi can easily serve web apps (Flask, FastAPI, or even Apache)
+- Multiple existing projects show Pi + tablet web app kiosks
+- iOS Guided Access works well for single-app lockdown
+- Touch events work through web browsers
+
+This would make your project much more accessible and environmentally friendly - people could use whatever old devices they have lying around, rather than needing to buy specific hardware.
+
+Would you like me to explore this web app approach instead of the HDMI-connected tablet idea? It would be more flexible and sustainable.
+
+User: I want it to work both ways - direct HDMI connection to Raspberry Pi chromium app from the tablet as we discussed earlier, OR the remotely accessed webapp approach. 
+
+I believe this would not fundamentally change the architecture anyway?
+
+GitHub Copilot: Optimizing tool selection...
+
+
+
+Fetched 3 resources
+
+You're absolutely right! Supporting both approaches won't fundamentally change the architecture at all. In fact, it's a brilliant design that keeps the same core components while adding tremendous flexibility.
+
+## Architecture Remains the Same
+
+The core architecture stays identical:
+- **Backend**: FastAPI server + SQLite database (handles all data fetching, OAuth, caching)
+- **Frontend**: React app (displays the interface)
+- **Deployment**: Docker containerization
+
+The only difference is **how the React app is delivered**:
+
+## Dual-Mode Frontend
+
+The React app can be built to work in both contexts:
+
+### Mode 1: Direct HDMI Connection (Kiosk Mode)
+- Pi runs Chromium in fullscreen kiosk mode
+- React app runs locally on the Pi
+- Tablet acts as a dumb display via HDMI
+- Touch input goes through HDMI (if supported) or the app can be passive
+
+### Mode 2: Remote Web App Access  
+- Pi serves the React app via web server (FastAPI can serve static files)
+- Any device (iPad, Android tablet, phone, laptop) connects via browser
+- Touch interaction works through web browser
+- Multiple devices can connect simultaneously if desired
+
+## Implementation Details
+
+From my research, this is very straightforward:
+
+**For Kiosk Mode:**
+- Use `chromium-browser --kiosk --app=http://localhost:3000` (or similar)
+- Configure HDMI output settings in `/boot/firmware/config.txt`
+- Touch input works if the tablet supports HDMI touch passthrough
+
+**For Web App Mode:**
+- FastAPI serves the built React app as static files
+- Add CORS headers for cross-device access
+- Use responsive design so it works on any screen size
+
+## Benefits of This Approach
+
+1. **Same Codebase**: One React app works in both modes
+2. **User Choice**: People can choose based on their hardware/setup
+3. **Sustainability**: Reuse old iPads, tablets, phones as displays
+4. **Development**: Can develop/test as a web app, deploy as kiosk
+5. **Flexibility**: Easy to switch modes by changing startup scripts
+
+## Configuration
+
+You could even add a config option to choose the mode:
+```json
+{
+  "display_mode": "kiosk" | "webapp",
+  "webapp_port": 3000,
+  "kiosk_url": "http://localhost:3000"
+}
+```
+
+This dual-mode approach makes your project much more versatile and accessible while keeping the architecture clean and maintainable. The backend doesn't care how the frontend is delivered - it just provides the API endpoints for data.
+
+Would you like me to explore how to implement the kiosk mode setup or the web serving configuration?
+
+User: yes I would want it to be user configurable. The idea of any device being able to access the same display is great, especially for home office / kitchen etc. 
+
+Help me understand the HDMI touch control compatibility question - you noted 'If supported'. 
+
+GitHub Copilot: 
+
+Fetched 3 resources
+
+
+
+Fetched 3 resources
+
+Compacted conversationHDMI is a video-only protocol and does not natively support touch input. The "if supported" caveat refers to the fact that touch functionality would require additional hardware connections (like USB) separate from the HDMI cable.
+
+For your smart display project, this means:
+
+**HDMI Kiosk Mode:**
+- Works great for video display
+- Touch input needs to be handled via USB (connecting the tablet's touch interface to the Pi's USB ports)
+- Some tablets may not support this split configuration
+
+**Web App Mode (Recommended for Touch):**
+- Full touch support through standard web technologies
+- Works on any device with a browser
+- No HDMI limitations
+
+The web app approach gives you the best touch experience and device flexibility. Would you like me to help design the configuration system for switching between these modes?
+
+User: so basically HDMI mode = non-interactive mode unless someone wants to tinker with the setup? I don't think anyone would want an HDMI AND USB connection.
+
+An important capability is full-screen display on the video device, regardless of the configuration. Do tablets typically support this? 
+
+GitHub Copilot: 
+
+Fetched 3 resources
+
+Compacted conversationYou're correct that HDMI mode would essentially be non-interactive for touch input, since HDMI is strictly a video protocol with no native touch support. Touch would require additional USB connections (for USB touch devices) or serial interfaces, which most people wouldn't want to deal with - it's definitely not a clean setup.
+
+Regarding full-screen display on tablets: Yes, tablets typically support full-screen display when connected via HDMI. Most Android tablets (and some iOS devices with adapters) have HDMI input capabilities that allow them to act as external displays. The Raspberry Pi can output video to the tablet's HDMI port, and the tablet will display the content full-screen, assuming:
+
+- The tablet supports HDMI input (most mid-range and higher Android tablets do)
+- The resolution matches what the tablet can handle (the Pi can be configured to output appropriate resolutions)
+- The tablet is set to mirror or extend the HDMI input rather than its own screen
+
+This makes HDMI + tablet a viable option for passive display, while the web app mode provides the interactive touch experience you want without any extra cables or setup complexity. The dual-mode approach gives users the flexibility to choose based on their needs.
+
+User: the 'HDMI port' on the tablet is connected via its USB port, correct? 
+
+The full-screen capability is required for interactive mode, too - where the tablet's browser is connecting to the remote Raspberry Pi. Is this feasible too? 
+
+GitHub Copilot: 
+
+Fetched 3 resources
+
+Compacted conversationNo, tablets typically do not have dedicated HDMI ports. Most modern tablets (like Samsung Galaxy Tab, Apple iPad, or Android tablets) use USB-C ports for video output. To connect to HDMI, you need a USB-C to HDMI adapter or cable, which converts the USB-C signal (often using DisplayPort Alt Mode) to HDMI. This is standard for tablets and doesn't involve a separate "HDMI port" - the USB-C port handles the video output.
+
+Yes, full-screen capability is feasible for the interactive web app mode. In this setup, the tablet's browser connects to the Raspberry Pi's web server over WiFi, and the display renders directly on the tablet's screen. Browsers on tablets (Safari on iPad, Chrome on Android tablets) support full-screen mode via JavaScript APIs like `requestFullscreen()`. You can implement this in your React app to make the interface fill the entire tablet screen, hiding browser UI elements for a kiosk-like experience. This works well for touch interaction and doesn't require HDMI.
+
+User: OK, I think I am close to being done with my questions. I want to be sure that all of this context will not be lost, I don't want to have to go over all this ground again. How can I be 100% certain that I can pick up where we left off? 
+
+GitHub Copilot: Created memory file [](file:///Users/phil/Library/Application%20Support/Code/User/globalStorage/github.copilot-chat/memory-tool/memories/smart-display-project.md)
+
+I've saved a comprehensive summary of your smart display project to persistent memory at `/memories/smart-display-project.md`. This includes all key decisions, technical details, current status, and next steps from our conversation.
+
+To ensure you can pick up exactly where we left off:
+- This memory is persistent across all workspaces and conversations, so it will be automatically loaded into my context for any future interactions.
+- If you start a new conversation or switch workspaces, you can ask me to "recall the smart display project" or "read from /memories/smart-display-project.md", and I'll have the full context immediately.
+- For added certainty, you can bookmark or note the memory path, and I'll always have access to it.
+
+You're all set—no need to repeat the groundwork. Ready to proceed with the architecture diagram or implementation?
+
+User: one last thing. I want to give it a compelling name
+
+GitHub Copilot: FrameSync
+
+This name captures the essence of your project: a smart display ("Frame") that syncs and integrates Google Photos, Calendar, and other data sources in a configurable, dual-mode system. It's memorable, evokes synchronization and connectivity, and hints at the sustainability aspect (syncing old devices into new life). If it doesn't resonate, alternatives like EcoFrame (emphasizing reuse) or SmartNest (home-focused) could work too.
+
+User: give me 2-3 more options along the lines of FrameSync. I like that, but once we decide there'll be no going back (not easliy anyway)
+
+GitHub Copilot: Here are 2-3 more name options inspired by "FrameSync," focusing on the display ("Frame") and synchronization/integration themes while keeping them short, memorable, and aligned with your project's smart, configurable, and sustainable nature:
+
+1. **FrameLink**  
+   Emphasizes linking data sources (Photos, Calendar) to the display frame, suggesting seamless connectivity and integration. It's versatile for future expansions like Spotify or Apple services.
+
+2. **SyncNest**  
+   Combines "Sync" for data synchronization with "Nest" to evoke a homey, adaptive hub for your living space or office. It hints at the dual-mode flexibility and reuse of old devices.
+
+3. **FrameHub**  
+   Positions the display as a central "hub" for syncing and managing content, like a smart home control center. It conveys configurability and open-source potential for community extensions.
+
+These maintain the core appeal of "FrameSync" (catchy, tech-forward, and project-specific) while offering slight variations. If none click, we can iterate further before finalizing.
+
+User: I think a USP of this is the opportunity for reuse of older devices. Let's try a couple more options along those lines
+
+GitHub Copilot: Here are 2-3 name options emphasizing the reuse of older devices as a key USP, blending sustainability ("Re," "Eco," "Renew") with the display and sync themes:
+
+1. **ReFrame**  
+   "Re" highlights reuse and renewal of old tablets/iPads, while "Frame" ties directly to the smart display. It's simple, memorable, and positions the project as an eco-friendly upgrade for discarded devices.
+
+2. **EcoFrame**  
+   "Eco" underscores the environmental sustainability of repurposing old hardware, combined with "Frame" for the display aspect. It evokes a green, innovative solution for home/office setups.
+
+3. **RenewSync**  
+   "Renew" emphasizes reviving old devices, paired with "Sync" for data integration. It suggests a fresh, synced experience from reused tech, appealing to users focused on reducing e-waste.
+
+These options lean into the reuse angle while staying concise and aligned with your project's smart, configurable nature. If you'd like more or refinements, let me know.
+
+User: oh I like ReFrame. Check for existing projects / products with this name in case I cause any obvious confusion or IP issues
+
+GitHub Copilot: 
+
+Fetched 3 resources
+
+Based on a quick search across GitHub, Wikipedia, and general web results for "ReFrame project or product," here are the notable existing entities with similar names. None appear to be direct trademark conflicts in your domain (smart displays/tech), but there could be potential for confusion, especially with open-source or community-facing projects:
+
+### Key Findings:
+1. **ReFrame (Hollywood Initiative)**: A prominent non-profit organization (reframeproject.org) focused on gender parity in film and TV. Founded by Women in Film and the Sundance Institute, it's well-known in entertainment circles with programs like the "ReFrame Stamp" for gender-balanced productions. This is the most established "ReFrame" and could cause brand confusion if your project gains visibility in creative/tech spaces.
+
+2. **ReFrame (HPC Framework)**: An open-source Python framework (reframe-hpc/reframe on GitHub, ~270 stars) for regression testing and benchmarking in high-performance computing (HPC) systems. It's actively maintained and used in scientific computing. If your project involves any tech benchmarking or open-source tooling, this could overlap.
+
+3. **REFramework**: A popular modding tool (praydog/REFramework on GitHub, ~4,900 stars) for RE Engine games (e.g., Resident Evil). It's gaming-focused but tech-oriented.
+
+4. **ReFrame.js**: A JavaScript library (dollarshaveclub/reframe.js, archived, ~1,600 stars) for responsive iframe scaling. Web-dev related.
+
+5. **Other Minor Ones**: Includes UiPath's ReFrameWork (robotic process automation template), ReFramed (metabolic modeling package), and a few smaller repos/tools. No major commercial products, but plenty of open-source projects.
+
+### Assessment:
+- **Confusion Risk**: Moderate to high. The Hollywood ReFrame is widely recognized, and the HPC ReFrame has a strong tech presence. If your project is open-source (as planned), it might get confused with these in searches or communities.
+- **IP Issues**: "ReFrame" doesn't appear trademarked for smart displays, but similarity to the Hollywood org could invite legal scrutiny if it grows. The HPC one is open-source, so no direct conflict, but differentiation is key.
+- **Recommendation**: "ReFrame" is a great fit for your reuse theme, but if you want to avoid any risk, consider slight tweaks like "ReFrame Display" or "ReFrame Hub" for clarity. If you're set on it, proceed—your project's focus on sustainability and tech should differentiate it. Let me know if you need help checking domain availability or refining branding!
+
+User: I'm not too concerned with potential conflicts as I certainly don't envisage this growing massively at first (who knows) - but I think adding a modifier to the name is a good idea. ReFrame Display seems good to me - you 'reframe' old tech to a modern purpose, you 'reframe' your day and display it visibly, and so on. 
+
+Even with this approach there's still a fairly high barrier to entry for non-tech people so I think it will remain niche (or even just personal to me) 
+
+GitHub Copilot: Updated memory file [](file:///Users/phil/Library/Application%20Support/Code/User/globalStorage/github.copilot-chat/memory-tool/memories/smart-display-project.md)
+
+Perfect—"ReFrame Display" is a solid, evocative name that captures the reuse theme while keeping it personal and niche. The high barrier to entry (tech setup) aligns with it staying manageable for now.
+
+With the name finalized, we're ready to dive into implementation. As a next step, I can create a visual architecture diagram to map out the dual-mode system (HDMI kiosk + web app). Would you like me to generate that now, or start with the backend code (e.g., FastAPI OAuth setup)? Let me know your preference!
+
+User: almost ready - let's take a step back for a moment. Are there any questions, concerns or gaps that you think we haven't considered? Once we start building, I want it to be smooth
+
+GitHub Copilot: Here are some potential questions, concerns, and gaps I see based on our discussions so far. I've prioritized the most relevant ones for a smooth build, focusing on technical, practical, and user-experience aspects. These aren't blockers, but addressing them early could prevent issues:
+
+### 1. **Security and Privacy (OAuth/Data Handling)**
+   - How will we securely store and refresh Google OAuth tokens (e.g., encrypted in SQLite)? What about token expiration or revocation?
+   - Google API rate limits (e.g., Photos API has quotas)—how to handle throttling or errors gracefully?
+   - Data privacy: Since it's self-hosted, ensure no unintended data leakage (e.g., via web app). Any need for HTTPS locally?
+
+### 2. **Performance and Resource Constraints**
+   - Raspberry Pi 5 is capable, but downloading/caching high-res photos/videos could strain bandwidth/storage. How much local storage for cache? Auto-cleanup?
+   - For the web app mode, real-time updates (e.g., WebSocket for touch) on WiFi—potential latency or battery drain on tablets?
+   - Passive HDMI mode: Screen timeout/blanking on tablets to save power?
+
+### 3. **Device Compatibility and Testing**
+   - Tablet support: Which models/OS versions work reliably for HDMI full-screen (e.g., iPad vs Android)? Any known bugs with adapters?
+   - Web app: Browser compatibility (Chrome/Safari on tablets)—full-screen API support, touch gestures?
+   - Testing dual modes: How to simulate both without multiple devices? Emulators or virtual setups?
+
+### 4. **User Experience and Configuration**
+   - Configuration UI: How intuitive for non-tech users? JSON files are simple, but a web-based config panel could help.
+   - Error handling: What if Google API fails, network drops, or HDMI disconnects? Fallback modes?
+   - Accessibility: Touch interactions, screen readers for calendar/photos?
+
+### 5. **Deployment and Maintenance**
+   - Docker setup on Pi: Auto-start, updates, logs? What if the Pi reboots?
+   - Networking: Static IP for web app access? Firewall rules for local security?
+   - Offline fallback: What displays if no internet (e.g., cached content only)?
+
+### 6. **Legal and Ethical Considerations**
+   - Google APIs: Ensure compliance with terms (e.g., no commercial use, attribution). Any open-source licensing for the project?
+   - Sustainability angle: Documenting reuse benefits, but avoid greenwashing claims.
+
+### 7. **Future Extensibility and Scope**
+   - Adding Spotify/Apple: API integrations—similar OAuth challenges?
+   - Multi-device support: If it grows beyond personal use, how to handle multiple displays/users?
+   - Open-source sharing: GitHub repo setup, licensing (MIT?), contribution guidelines?
+
+These are mostly edge cases, and we can tackle them iteratively. If any resonate or if there's something specific you're worried about, let's discuss. Otherwise, I'm ready to start with the architecture diagram or code!
+
+User: does Google support an API for this? Tell me about it, specifically calendar and photos integration.
+
+GitHub Copilot: 
+
+
+
+Fetched 2 resources
+
+Fetched 2 resources
+
+Yes, Google fully supports APIs for both Calendar and Photos integration, making them ideal for ReFrame Display. Below, I'll break down the key details for each, based on official Google documentation. Both use OAuth 2.0 for authentication (perfect for self-hosted setups), RESTful interfaces, and have quotas/limits to consider. They're designed for personal/non-commercial use like yours, but check Google's terms for any restrictions.
+
+### Google Calendar API
+- **Overview**: A comprehensive REST API (v3) that mirrors most Google Calendar web features. It allows read/write access to events, calendars, and user settings. Perfect for displaying upcoming events, daily schedules, or reminders on your smart display.
+- **Key Features**:
+  - **Read Events**: List events from specific calendars (e.g., primary calendar or shared ones), filter by date/time, handle recurring events, and get details like title, time, location, attendees.
+  - **Write Events**: Create, update, delete events (e.g., for interactive mode if you add touch controls).
+  - **Other**: Query free/busy status, manage calendar lists, access user settings (e.g., time zone).
+  - **Real-Time Updates**: Supports push notifications via webhooks for live syncing.
+- **Authentication & Setup**:
+  - OAuth 2.0 (server-side flow for self-hosted apps).
+  - Scopes: e.g., `https://www.googleapis.com/auth/calendar.readonly` for read-only access.
+  - Requires a Google Cloud project, API key, and OAuth consent screen.
+- **Limits & Quotas**:
+  - 1 billion requests/day globally, but per-user: ~10,000 read queries/day, 1,000 write operations/day.
+  - Rate limits: 100 requests/second per user.
+  - No cost for basic use; higher quotas via partner programs if needed.
+- **Integration for ReFrame Display**:
+  - Fetch events periodically (e.g., via cron job) and cache in SQLite.
+  - Display as a calendar view in React (e.g., today's events, weekly overview).
+  - Handles time zones and recurring events seamlessly.
+- **Resources**: Full reference at developers.google.com/calendar/api/v3/reference. Client libraries available for Python (google-api-python-client).
+
+### Google Photos API
+- **Overview**: Two main APIs—Library API (for managing app-created content) and Picker API (for user-selected media). For ReFrame Display, you'll likely use the **Picker API** to let users select photos/videos from their full library for slideshows, as the Library API is more for app-uploaded content. It's REST-based and integrates well with OAuth.
+- **Key Features**:
+  - **Picker API** (Recommended for your use case): Allows users to securely select media items (photos/videos) from their Google Photos library. Returns metadata and download URLs. Supports sessions for multi-select and filtering (e.g., by date, album).
+    - Ideal for slideshows: User picks a set of photos, app caches/downloads them for display.
+  - **Library API**: For app-managed content—upload, list, search, and organize media items/albums created by your app. Limited to app-created items (can't access full user library directly).
+  - **Media Handling**: Supports high-res downloads, metadata (e.g., EXIF, creation time), and albums.
+  - **Real-Time**: No built-in push, but you can poll for updates.
+- **Authentication & Setup**:
+  - OAuth 2.0 (same as Calendar).
+  - Scopes: e.g., `https://www.googleapis.com/auth/photoslibrary.readonly` for Picker/Library read access.
+  - Google Cloud project required; no service accounts (user must authenticate).
+- **Limits & Quotas**:
+  - Picker API: 10,000 sessions/day, 100 items per session.
+  - Library API: 25,000 requests/day, 75,000 media items managed per app.
+  - Bandwidth: Downloads count toward quotas; cache locally to minimize.
+  - No cost for basic use; partner program for higher limits.
+- **Integration for ReFrame Display**:
+  - Use Picker API for user selection (e.g., during setup, pick favorite albums for slideshow).
+  - Download/cache media to Pi's storage (respect quotas; use low-res thumbnails initially).
+  - Display in React as a slideshow (rotate photos, show metadata like dates).
+  - Note: Can't auto-access full library without user consent—Picker ensures privacy.
+- **Resources**: Picker API at developers.google.com/photos/picker; Library API at developers.google.com/photos/library. Python libraries available.
+
+### General Notes
+- **Setup Steps**: Create a Google Cloud project, enable APIs, set up OAuth, and use Python libraries (e.g., `google-api-python-client` for both).
+- **Self-Hosted Fit**: OAuth works for personal use; tokens can be stored securely (encrypt in SQLite).
+- **Potential Challenges**: Quotas for heavy use (e.g., frequent photo downloads); handle rate limits/errors gracefully. Photos API has restrictions on full library access for privacy.
+- **Extensibility**: Easy to add Spotify/Apple later using similar OAuth flows.
+- **Legal**: Free for non-commercial; comply with Google's API policies (no resale, attribution).
+
+If this aligns with your vision, we can start implementing the backend OAuth and data fetching. Any specific questions on setup or features?
+
+User: should we build a list of pre-requisite setup steps that I need to follow, but also for other potential users? For example, Google Cloud project for the API key, and OAuth consent screen
+
+GitHub Copilot: Create File
+
+Here's a comprehensive list of prerequisite setup steps for ReFrame Display. I've structured it for both you (as the developer) and potential open-source users, covering Google Cloud setup, hardware/software basics, and initial configuration. This ensures a smooth build and deployment. I've formatted it as a markdown document for easy copying into your project docs (e.g., `docs/setup.md`).
+
+---
+
+# ReFrame Display Setup Prerequisites
+
+This guide outlines the essential setup steps for developers and users to get ReFrame Display running. These steps ensure secure access to Google Calendar and Photos APIs via OAuth 2.0. The process is designed for self-hosted, personal use but can scale for open-source sharing.
+
+## For All Users (Developers and End-Users)
+
+### 1. Hardware and Software Basics
+- **Raspberry Pi Setup**: Use Raspberry Pi 5 with Raspberry Pi OS (Bookworm or later). Ensure Docker is installed (`sudo apt update && sudo apt install docker.io`).
+- **Tablet/Device**: An old iPad, Android tablet, or similar with HDMI output and web browser support. For HDMI mode, ensure full-screen compatibility (test with adapters).
+- **Network**: Local WiFi access for the Pi and tablet. Static IP recommended for consistent web app access.
+- **Python Environment**: Install Python 3.9+ on the Pi. Use virtualenv for isolation: `python3 -m venv reframe-env && source reframe-env/bin/activate`.
+
+### 2. Google Cloud Project and API Access
+ReFrame Display requires a Google Cloud project to access Calendar and Photos APIs. This is free for basic use (up to quotas).
+
+- **Create a Google Cloud Project**:
+  - Go to [Google Cloud Console](https://console.cloud.google.com/).
+  - Create a new project (e.g., "ReFrame-Display").
+  - Note the Project ID (e.g., `reframe-display-12345`).
+
+- **Enable Required APIs**:
+  - In the Cloud Console, go to "APIs & Services" > "Library".
+  - Search for and enable:
+    - Google Calendar API.
+    - Google Photos Library API (for app-managed photos; use Picker API for user selections).
+  - Optionally, Google Photos Picker API if implementing user photo selection.
+
+- **Create OAuth 2.0 Credentials**:
+  - Go to "APIs & Services" > "Credentials".
+  - Click "Create Credentials" > "OAuth 2.0 Client IDs".
+  - Choose "Web application" as application type.
+  - Set authorized redirect URIs to `http://localhost:8000/oauth2callback` (for local testing) and your Pi's IP (e.g., `http://192.168.1.100:8000/oauth2callback`).
+  - Download the JSON credentials file (contains Client ID, Client Secret). Store securely on the Pi (e.g., in `~/.config/reframe/credentials.json`).
+
+- **Configure OAuth Consent Screen**:
+  - In "APIs & Services" > "OAuth consent screen", set up for "External" user type.
+  - App name: "ReFrame Display".
+  - User support email: Your email.
+  - Scopes: Add `https://www.googleapis.com/auth/calendar.readonly` and `https://www.googleapis.com/auth/photoslibrary.readonly`.
+  - Submit for verification if publishing (not needed for personal use).
+
+### 3. Install Dependencies
+- **Python Libraries**: Run `pip install fastapi uvicorn google-api-python-client google-auth-oauthlib google-auth-httplib2 sqlalchemy` (for backend).
+- **Frontend**: Node.js for React (if building locally): `sudo apt install nodejs npm`.
+- **Docker**: Pull base images if using containers: `docker pull python:3.9-slim` and `docker pull node:18-alpine`.
+
+### 4. Clone and Configure the Project
+- **Clone Repository**: `git clone https://github.com/yourusername/reframe-display.git` (placeholder; create when ready).
+- **Environment Variables**: Create a `.env` file with:
+  ```
+  GOOGLE_CLIENT_ID=your_client_id
+  GOOGLE_CLIENT_SECRET=your_client_secret
+  DATABASE_URL=sqlite:///./reframe.db
+  REDIRECT_URI=http://your_pi_ip:8000/oauth2callback
+  ```
+- **Database**: SQLite will auto-create on first run.
+
+### 5. Run Initial Setup
+- **Backend**: `uvicorn main:app --host 0.0.0.0 --port 8000` (FastAPI server).
+- **OAuth Flow**: Visit `http://your_pi_ip:8000/auth` in a browser to authorize Google access. Tokens will be stored securely.
+- **Frontend**: Build React app (`npm run build`) and serve via FastAPI or Nginx.
+
+### 6. Test and Configure Modes
+- **HDMI Mode**: Connect tablet via HDMI, run kiosk script (e.g., Chromium in full-screen).
+- **Web App Mode**: Access via browser on any device.
+- **Settings**: Use JSON config for modes, refresh intervals, etc.
+
+## Additional Notes for Open-Source Users
+- **Quotas and Limits**: Monitor Google API usage (free up to 10k/day for Calendar, 25k for Photos). Upgrade via Google Cloud billing if needed.
+- **Security**: Never share credentials. Use HTTPS locally if exposing externally.
+- **Troubleshooting**: Check logs for OAuth errors. Ensure firewall allows port 8000.
+- **Contributing**: If sharing, include this guide in `docs/setup.md`.
+
+---
+
+This covers the essentials without overwhelming details. It's tailored for your niche, self-hosted use case. If you'd like to refine it (e.g., add screenshots or scripts), or proceed to building the backend, let me know!
+
+User: looks good. Is it a good time to create the repo on GitHub so that we can start persisting assets like this?
+
+GitHub Copilot: Yes, now is an excellent time to create the GitHub repo for ReFrame Display. It will allow us to persist assets like the setup guide, version control code as we build, and set up a foundation for open-source sharing. Since the project is niche and personal, a public repo with MIT licensing will work well.
+
+Here's how to get started:
+
+### Steps to Create the Repo
+1. **Go to GitHub**: Log in to [github.com](https://github.com) and click "New repository" (or the "+" icon > "New repository").
+2. **Repo Details**:
+   - **Name**: `reframe-display` (or `ReFrame-Display` if you prefer).
+   - **Description**: "A configurable smart display system for home/office use, integrating Google Photos and Calendar with dual HDMI/web app modes. Built with FastAPI, React, and SQLite."
+   - **Visibility**: Public (for open-source).
+   - **Initialize with**: Check "Add a README file" and "Choose a license" (select MIT License).
+3. **Create**: Click "Create repository."
+4. **Clone Locally**: On your machine, run `git clone https://github.com/yourusername/reframe-display.git` (replace with your username).
+
+### Initial Structure and Assets
+Once cloned, set up a basic folder structure and add the setup guide. I can help generate initial files if you provide the repo path.
+
+Suggested structure:
+```
+reframe-display/
+├── docs/
+│   └── setup.md  # The prerequisites guide
+├── backend/      # FastAPI code
+├── frontend/     # React app
+├── config/       # JSON settings
+├── deploy/       # Docker scripts
+├── README.md     # Project overview
+├── LICENSE       # MIT
+└── .gitignore    # Ignore credentials, env files
+```
+
+- **Add the Setup Guide**: Copy the markdown from my previous response into `docs/setup.md`.
+- **Update README.md**: Include project goals, architecture overview, and links to setup/docs.
+- **Commit and Push**: `git add . && git commit -m "Initial commit with setup docs" && git push origin main`.
+
+### Next Steps
+- After creating the repo, share the URL here, and I can help with initial code (e.g., FastAPI OAuth setup) or generate more docs/assets.
+- Consider adding issues for features (e.g., "Implement Google Calendar integration") and a basic CI/CD if you want.
+
+This will keep everything organized and versioned. Ready to proceed?
+
+User: yes, here is the repo URL: https://github.com/philipfreid/reframe-display.git and it's checked out at /Users/phil/dev-projects/reframe-display
+
+I only want the very basics added to the repo for now, no code - we haven't done the architecture review yet 
+
+GitHub Copilot: Read [](file:///Users/phil/dev-projects/reframe-display)
+
+Read [](file:///Users/phil/dev-projects/reframe-display/README.md)
+
+Replacing 5 lines with 40 lines in [](file:///Users/phil/dev-projects/reframe-display/README.md)
+
+
+```
+
+```
+
+
+Created [](file:///Users/phil/dev-projects/reframe-display/docs)
+
+Created [](file:///Users/phil/dev-projects/reframe-display/docs/setup.md)
+
+Created [](file:///Users/phil/dev-projects/reframe-display/backend)
+
+Created [](file:///Users/phil/dev-projects/reframe-display/frontend)
+
+Created [](file:///Users/phil/dev-projects/reframe-display/config)
+
+Created [](file:///Users/phil/dev-projects/reframe-display/deploy)
+
+Created [](file:///Users/phil/dev-projects/reframe-display/.gitignore)
+
+Created [](file:///Users/phil/dev-projects/reframe-display/.env.example)
+
+Ran terminal command:  cd /Users/phil/dev-projects/reframe-display && git add . && git commit -m "Add basic project structure and setup docs"
+
+Ran terminal command:  git push origin main
+
+Made changes.
+
+Similar code found with 2 license types
+
+User: stop, I need to authenticate VS Code to my GitHub account
+
+GitHub Copilot: No problem—let's pause the push. To authenticate VS Code with your GitHub account for pushing commits:
+
+1. **In VS Code**: Open the Source Control view (Ctrl+Shift+G or View > SCM).
+2. **Sign In**: Click the "Sign in to GitHub" button (or the account icon in the bottom-left status bar).
+3. **Choose Method**:
+   - **GitHub Device Code**: Recommended—VS Code will show a device code; copy it, go to [github.com/device](https://github.com/device) in your browser, paste the code, and authorize.
+   - **Personal Access Token**: If preferred, generate one at [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens), then paste it in VS Code.
+4. **Scopes**: For the token, ensure it has `repo` scope for pushing to repos.
+5. **Retry Push**: Once authenticated, run `git push origin main` in the terminal or use VS Code's push button.
+
+After that's set up, we can proceed with pushing the basics. Let me know when you're ready!
+
+User: who suggested I introduce touch control?
+
+GitHub Copilot: You did. The touch-control idea came from your own requirement for an interactive tablet mode, and I confirmed how it fits best via the web app route rather than HDMI video-only.
+
+User: I want to persist all of this context to disk. I was thinking of creating a README-AI.md. Should this be per-project or global to the various activities we do?
+
+GitHub Copilot: ## Recommendation
+
+For this work, make `README-AI.md` a **project-specific file** inside `reframe-display/`.
+
+### Why per-project
+- Keeps the context directly with the repo.
+- Makes it easy to resume this exact project later.
+- Avoids mixing unrelated goals, requirements, and technical decisions.
+
+### When global makes sense
+Use a separate global note for:
+- your overall AI-assistant workflow,
+- reusable patterns,
+- “how I like to structure projects” guidance,
+- or a dashboard of active projects.
+
+### Best approach
+- Create `reframe-display/README-AI.md` for all ReFrame Display context.
+- If you want, also keep a separate global file like `~/AI-notes.md` for cross-project habits and high-level ideas.
+
+That gives you the best of both: project-specific persistence plus a lightweight global reference.
+
+User: create the project-specific one and persist everything you need in order to pick up the deep context we've created when I open the chat after loading the project into VS Code. Please also create a log of the chat as a json file in the folder /Users/phil/dev-projects/
+
+GitHub Copilot: 
