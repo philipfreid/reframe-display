@@ -78,14 +78,13 @@ Old tablets become smart displays. Reduces e-waste.
 - Project structure initialized
 
 ### Pending
-1. System architecture diagram (visual)
-2. Backend implementation (FastAPI OAuth)
-3. Frontend implementation (React components)
-4. Docker deployment scripts
-5. Testing and debugging
+1. Backend implementation (FastAPI OAuth)
+2. Frontend implementation (React components)
+3. Docker deployment scripts
+4. Testing and debugging
 
 ### Next Immediate
-Create system architecture diagram showing Pi/API/display interactions.
+Create backend scaffold with config loader and health endpoint.
 
 ## Architecture Overview
 
@@ -97,6 +96,8 @@ Google APIs → Raspberry Pi 5 → HDMI Tablet | Web Browser
               ├─ Data Caching
               └─ REST Endpoints
 ```
+
+Canonical diagram and lifecycle flow are maintained in `docs/architecture.md`.
 
 ## Configuration Structure (Future JSON)
 
